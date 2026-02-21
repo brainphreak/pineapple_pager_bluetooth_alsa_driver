@@ -50,8 +50,6 @@ The pairing script will:
 ```
 bt-pair.sh             # Self-contained pairing + audio test
 test-tone.sh           # Generate and play a dual-tone test
-install.sh             # System-wide installer (alternative)
-uninstall.sh           # Uninstaller for install.sh
 bin/
   bluealsad            # BlueALSA v4.3.1 daemon (255KB, MIPS)
   aplay                # ALSA audio player (66KB, MIPS)
