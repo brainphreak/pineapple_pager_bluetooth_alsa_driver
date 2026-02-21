@@ -14,7 +14,7 @@ Pre-compiled Bluetooth A2DP audio for the Hak5 WiFi Pineapple Pager (mipsel_24kc
 ## Recommended Dongles
 
 - **CSR8510** (~$3-5) — BT 4.0, plug-and-play, no firmware needed
-- **RTL8761B** (~$5-8) — BT 5.0, needs firmware files in `/lib/firmware/rtl_bt/`
+- **RTL8761B** (~$5-8) — BT 5.0, firmware included in this bundle
 
 Both are available as tiny USB nubs that barely protrude from the port.
 
@@ -45,48 +45,24 @@ The pairing script will:
 - Play a test tone to confirm audio works
 - Clean up on exit (stop bluealsad, remove D-Bus config)
 
-## Manual Usage
-
-```bash
-# Set up environment
-export LD_LIBRARY_PATH="/root/bt-audio-pager/lib:/usr/lib"
-export ALSA_PLUGIN_DIR="/root/bt-audio-pager/lib"
-export ALSA_CONFIG_PATH="/root/bt-audio-pager/config/asound.conf"
-
-# Install D-Bus config (required, restart dbus after)
-cp config/bluealsa-dbus.conf /etc/dbus-1/system.d/bluealsa.conf
-
-# Start the daemon
-./bin/bluealsad -p a2dp-source -p a2dp-sink -S &
-
-# Pair a speaker
-bluetoothctl pairable on
-hcitool scan                  # BR/EDR classic scan
-bluetoothctl pair XX:XX:XX:XX:XX:XX
-bluetoothctl trust XX:XX:XX:XX:XX:XX
-bluetoothctl connect XX:XX:XX:XX:XX:XX
-
-# Play audio
-aplay -D bluealsa music.wav
-```
-
 ## What's Included
 
 ```
-bt-audio-pager/
-  bt-pair.sh       # Self-contained pairing + audio test
-  test-tone.sh     # Generate and play a dual-tone test
-  install.sh       # System-wide installer (alternative)
-  uninstall.sh     # Uninstaller for install.sh
-  bin/bluealsad    # BlueALSA v4.3.1 daemon (255KB, MIPS)
-  lib/             # ALSA libraries + BlueALSA plugins
-    libasound.so.2.0.0
-    libatopology.so.2.0.0
-    libsbc.so.1.3.1
-    libasound_module_pcm_bluealsa.so
-    libasound_module_ctl_bluealsa.so
-  config/          # ALSA and D-Bus configs
-  README.md        # This file
+bt-pair.sh             # Self-contained pairing + audio test
+test-tone.sh           # Generate and play a dual-tone test
+install.sh             # System-wide installer (alternative)
+uninstall.sh           # Uninstaller for install.sh
+bin/
+  bluealsad            # BlueALSA v4.3.1 daemon (255KB, MIPS)
+  aplay                # ALSA audio player (66KB, MIPS)
+lib/                   # ALSA libraries + BlueALSA plugins
+  libasound.so.2.0.0
+  libatopology.so.2.0.0
+  libsbc.so.1.3.1
+  libasound_module_pcm_bluealsa.so
+  libasound_module_ctl_bluealsa.so
+config/                # ALSA and D-Bus configs
+firmware/rtl_bt/       # RTL8761B firmware (auto-installed if needed)
 ```
 
 ## Built With
