@@ -40,11 +40,15 @@ if [ -d "$SCRIPT_DIR/firmware/rtl_bt" ] && [ ! -f /lib/firmware/rtl_bt/rtl8761b_
     cp "$SCRIPT_DIR/firmware/rtl_bt/"*.bin /lib/firmware/rtl_bt/ 2>/dev/null
 fi
 
-# --- Find Bluetooth adapter ---
+# --- Find USB Bluetooth adapter (skip built-in MT7961) ---
 HCI=""
+ADAPTER_MAC=""
 for h in hci1 hci0; do
     if hciconfig "$h" 2>/dev/null | grep -q "Bus: USB"; then
+        # Get the BD address of this adapter
+        ADDR=$(hciconfig "$h" 2>/dev/null | grep "BD Address" | awk '{print $3}')
         HCI="$h"
+        ADAPTER_MAC="$ADDR"
         break
     fi
 done
@@ -56,20 +60,11 @@ if [ -z "$HCI" ]; then
 fi
 
 echo "=== BlueALSA Bluetooth Audio ==="
-echo "Using adapter: $HCI"
+echo "Using adapter: $HCI ($ADAPTER_MAC)"
 hciconfig "$HCI" up 2>/dev/null
 hciconfig "$HCI" auth encrypt 2>/dev/null
 
-# --- Start bluetoothd if not running ---
-if ! pidof bluetoothd >/dev/null 2>&1; then
-    echo "Starting bluetoothd..."
-    bluetoothd -n &
-    sleep 2
-fi
-
-bluetoothctl pairable on 2>/dev/null
-
-# --- Install D-Bus config (required for bluealsad, removed on exit) ---
+# --- Install D-Bus config FIRST (required for bluealsad) ---
 if [ ! -f "$DBUS_CONF" ]; then
     cp "$SCRIPT_DIR/config/bluealsa-dbus.conf" "$DBUS_CONF"
     DBUS_INSTALLED=1
@@ -77,21 +72,34 @@ if [ ! -f "$DBUS_CONF" ]; then
     if [ -x /etc/init.d/dbus ]; then
         /etc/init.d/dbus restart 2>/dev/null
         sleep 2
-        # Restart bluetoothd since dbus restarted
-        if pidof bluetoothd >/dev/null 2>&1; then
-            killall bluetoothd 2>/dev/null
-            sleep 1
-            bluetoothd -n &
-            sleep 2
-            bluetoothctl pairable on 2>/dev/null
-        fi
     fi
 fi
 
-# --- Start bluealsad from local folder ---
+# --- Start bluetoothd (must be running before bluealsad) ---
+if pidof bluetoothd >/dev/null 2>&1; then
+    # If dbus was restarted, bluetoothd needs restarting too
+    if [ "$DBUS_INSTALLED" = "1" ]; then
+        killall bluetoothd 2>/dev/null
+        sleep 1
+    fi
+fi
+if ! pidof bluetoothd >/dev/null 2>&1; then
+    echo "Starting bluetoothd..."
+    bluetoothd -n &
+    sleep 2
+fi
+bluetoothctl pairable on 2>/dev/null
+
+# --- Select the USB dongle adapter in bluetoothctl ---
+if [ -n "$ADAPTER_MAC" ]; then
+    echo "Selecting adapter $ADAPTER_MAC..."
+    bluetoothctl select "$ADAPTER_MAC" 2>/dev/null
+fi
+
+# --- Start bluealsad BEFORE scanning/pairing (must register A2DP endpoints first) ---
 if ! pidof bluealsad >/dev/null 2>&1; then
     echo "Starting bluealsad..."
-    "$SCRIPT_DIR/bin/bluealsad" -p a2dp-source -p a2dp-sink -S &
+    "$SCRIPT_DIR/bin/bluealsad" -i "$HCI" -p a2dp-source -p a2dp-sink -S &
     BLUEALSAD_PID=$!
     sleep 3
     if ! kill -0 "$BLUEALSAD_PID" 2>/dev/null; then
@@ -127,8 +135,17 @@ fi
 
 echo ""
 echo "=== Pairing with $MAC ==="
+
+# Disconnect first in case device auto-connected to wrong adapter
+bluetoothctl disconnect "$MAC" 2>/dev/null
+sleep 1
 bluetoothctl remove "$MAC" 2>/dev/null
 sleep 1
+
+# Re-select adapter (in case remove reset it)
+if [ -n "$ADAPTER_MAC" ]; then
+    bluetoothctl select "$ADAPTER_MAC" 2>/dev/null
+fi
 
 # Scan to discover device in bluetoothctl's cache (BR/EDR)
 echo "Discovering device..."
@@ -158,6 +175,10 @@ sleep 3
 echo "Trusting..."
 bluetoothctl trust "$MAC" 2>&1
 sleep 1
+
+# --- Write paired MAC into asound.conf before connecting ---
+echo "Configuring audio for $MAC..."
+sed -i "s/device \".*\"/device \"$MAC\"/" "$SCRIPT_DIR/config/asound.conf"
 
 echo "Connecting..."
 bluetoothctl connect "$MAC" 2>&1

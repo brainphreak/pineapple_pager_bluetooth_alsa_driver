@@ -39,20 +39,41 @@ The script is **self-contained** — it runs entirely from this folder using loc
 
 The pairing script will:
 - Find your USB dongle automatically (skips the broken built-in adapter)
-- Start bluetoothd and bluealsad if needed
+- Explicitly select the USB dongle (not the broken built-in MT7961)
+- Start bluetoothd and bluealsad in the correct order
 - Scan for nearby speakers (BR/EDR classic scan)
 - Pair, trust, and connect
+- Auto-configure the audio device address
 - Play a test tone to confirm audio works
 - Clean up on exit (stop bluealsad, remove D-Bus config)
+
+## MP3 Playback
+
+After pairing with `bt-pair.sh`, you can play MP3 files over Bluetooth:
+
+```bash
+# Play a single file
+sh play-mp3.sh /mmc/music/song.mp3
+
+# Play multiple files
+sh play-mp3.sh /mmc/music/*.mp3
+
+# Or use mp3decode directly for custom pipelines
+./bin/mp3decode song.mp3 | aplay -D bluealsa -f S16_LE -r 44100 -c 2 -
+```
+
+The `mp3decode` binary is a tiny (84KB) static MIPS binary that decodes MP3 to raw PCM. It prints the detected sample rate and channel count to stderr.
 
 ## What's Included
 
 ```
 bt-pair.sh             # Self-contained pairing + audio test
+play-mp3.sh            # MP3 playback wrapper (decode + aplay)
 test-tone.sh           # Generate and play a dual-tone test
 bin/
   bluealsad            # BlueALSA v4.3.1 daemon (255KB, MIPS)
   aplay                # ALSA audio player (66KB, MIPS)
+  mp3decode            # MP3-to-PCM decoder (84KB, MIPS, static)
 lib/                   # ALSA libraries + BlueALSA plugins
   libasound.so.2.0.0
   libatopology.so.2.0.0
@@ -66,6 +87,7 @@ firmware/rtl_bt/       # RTL8761B firmware (auto-installed if needed)
 ## Built With
 
 - BlueALSA v4.3.1
+- minimp3 (single-header MP3 decoder)
 - Cross-compiled for mipsel_24kc using OpenWrt SDK
 - Targets: BlueZ 5.72, ALSA 1.2.11, SBC 2.0, D-Bus 1.14, GLib 2.78
 
